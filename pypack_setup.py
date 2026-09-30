@@ -160,3 +160,34 @@ def _pypi_names():
         pass
     return names
 
+
+def _pypi_popularity():
+    """Project names ordered by recent downloads (hugovk top-pypi-packages,
+    ~0.8MB), cached on disk and refreshed every 12h."""
+    import time
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    path = os.path.join(base, ".pypack_pypi_popular.txt")
+    try:
+        if os.path.exists(path) and time.time() - os.path.getmtime(path) < 43200:
+            with open(path, encoding="utf-8") as f:
+                ns = [l.strip() for l in f if l.strip()]
+            if ns:
+                return ns
+    except Exception:
+        pass
+    try:
+        req = urlreq.Request(
+            "https://hugovk.dev/top-pypi-packages/top-pypi-packages.min.json",
+            headers={"User-Agent": "PyPack/1.0"})
+        with urlreq.urlopen(req, timeout=60) as r:
+            data = json.load(r)
+        names = [row["project"] for row in data.get("rows", [])]
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(names))
+        except Exception:
+            pass
+        return names
+    except Exception:
+        return None
+
