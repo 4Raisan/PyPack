@@ -129,3 +129,34 @@ def ensure_essentials(log=print, progress=None):
     say(f"Ready. pip {pip_ver(refresh=True)}")
     return True
 
+
+def _pypi_names():
+    """All PyPI project names, cached on disk and refreshed every 12h."""
+    import time, gzip
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    path = os.path.join(base, ".pypack_pypi_index.txt")
+    try:
+        if os.path.exists(path) and time.time() - os.path.getmtime(path) < 43200:
+            with open(path, encoding="utf-8") as f:
+                ns = [l.strip() for l in f if l.strip()]
+            if ns:
+                return ns
+    except Exception:
+        pass
+    req = urlreq.Request("https://pypi.org/simple/", headers={
+        "User-Agent": "PyPack/1.0",
+        "Accept": "application/vnd.pypi.simple.v1+json",
+        "Accept-Encoding": "gzip"})
+    with urlreq.urlopen(req, timeout=90) as r:
+        data = r.read()
+        enc = r.headers.get("Content-Encoding", "")
+    if enc.lower() == "gzip" or data[:2] == b"\x1f\x8b":
+        data = gzip.decompress(data)
+    names = [p["name"] for p in json.loads(data)["projects"]]
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(names))
+    except Exception:
+        pass
+    return names
+
