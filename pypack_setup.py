@@ -74,3 +74,15 @@ def pip_ver(refresh=False):
         _PIPVER = "missing"
     return _PIPVER
 
+
+def can_modify_environment(log=print):
+    """Respect OS-managed Python; do not override its package protection."""
+    import sysconfig
+    marker = os.path.join(sysconfig.get_path("stdlib"), "EXTERNALLY-MANAGED")
+    managed = _TARGET_INFO["managed"] if _TARGET_INFO else (sys.prefix == sys.base_prefix and os.path.isfile(marker))
+    if managed:
+        log("!! This Python is managed by the operating system. Create and activate a virtual environment, then run PyPack there.")
+        log(f'   "{PYS}" -m venv .venv')
+        return False
+    return True
+
