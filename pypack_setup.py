@@ -119,4 +119,13 @@ def ensure_essentials(log=print, progress=None):
         except Exception as e:
             say(f"!! get-pip failed: {e}")
             return False
+    say("Updating pip + essentials...", "Updating pip")
+    ok, out = run(pip_cmd("install", "--upgrade", "-q",
+                          "pip", "setuptools", "wheel"), timeout=300)
+    if not ok:
+        say(out[-1500:] if len(out) > 1500 else out)
+        say("!! essentials update failed.")
+        return False
+    say(f"Ready. pip {pip_ver(refresh=True)}")
     return True
+
