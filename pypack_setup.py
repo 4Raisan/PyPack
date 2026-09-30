@@ -191,3 +191,35 @@ def _pypi_popularity():
     except Exception:
         return None
 
+
+def search_pypi(name, limit=20):
+    """Light PyPI search via stdlib only. Returns [names] (best first)."""
+    name = (name or "").strip()
+    if not name or limit <= 0:
+        return []
+    # Fast lane: PyPI simple index, cached locally (refetched every 12h),
+    # then substring match -> real multi-result search.
+    try:
+        names = _pypi_names()
+        if names:
+            q = name.lower()
+            starts, contains = [], []
+            for n in names:
+                ln = n.lower()
+                if ln.startswith(q):
+                    starts.append(n)
+                elif q in ln:
+                    contains.append(n)
+            if not starts and not contains:
+                return []
+            pop = _pypi_popularity() or []
+            rank = {n.lower(): i for i, n in enumerate(pop)}
+            starts.sort(key=lambda n: (n.lower() != q, rank.get(n.lower(), 10**9), len(n), n.lower()))
+            contains.sort(key=lambda n: (rank.get(n.lower(), 10**9), len(n), n.lower()))
+            out = (starts + contains)[:limit]
+            if out:
+                return out
+    except Exception:
+        pass
+    # Slow lanes: exact name via pip, then JSON, then installed-fuzzy.
+    return []
