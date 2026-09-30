@@ -44,3 +44,33 @@ def pip_cmd(*args):
         raise RuntimeError("Choose a Python interpreter first.")
     return [PYS, "-m", "pip", "--disable-pip-version-check", "--no-input", *args]
 
+
+def has_net(timeout=6):
+    try:  # tiny read + close: avoids hanging on throttled simple index
+        r = urlreq.urlopen("https://pypi.org/simple/", timeout=timeout)
+        r.read(64)
+        r.close()
+        return True
+    except Exception:
+        return False
+
+
+def py_ver():
+    return _TARGET_INFO["version"] if _TARGET_INFO else platform.python_version()
+
+
+def pip_ver(refresh=False):
+    """pip version, cached so each GUI log line doesn't spawn a subprocess."""
+    global _PIPVER
+    if _PIPVER is not None and not refresh:
+        return _PIPVER
+    ok, out = run(pip_cmd("--version"), timeout=15)
+    if ok and out:
+        try:
+            _PIPVER = out.split()[1]
+        except Exception:
+            _PIPVER = out.strip()[:40]
+    else:
+        _PIPVER = "missing"
+    return _PIPVER
+
