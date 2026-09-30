@@ -86,3 +86,37 @@ def can_modify_environment(log=print):
         return False
     return True
 
+
+def ensure_essentials(log=print, progress=None):
+    """Replaces 'after python': ensure pip + upgrade pip/setuptools/wheel."""
+    def say(m, p=None):
+        log(m)
+        if progress:
+            try:
+                progress(p or m)
+            except Exception:
+                pass
+    if not can_modify_environment(log):
+        return False
+    say("Checking internet...", "Checking internet")
+    if not has_net():
+        say("!! OFFLINE - connect to internet and retry.")
+        return False
+    say("Internet OK. Checking pip...", "Checking pip")
+    run([PYS, "-m", "ensurepip", "--upgrade"], timeout=120)
+    # bootstrap via get-pip.py if still no pip
+    ok, _ = run(pip_cmd("--version"), timeout=30)
+    if not ok:
+        say("pip missing, installing it...", "Installing pip")
+        try:
+            with tempfile.TemporaryDirectory(prefix="pypack-pip-") as directory:
+                script = os.path.join(directory, "get-pip.py")
+                urlreq.urlretrieve("https://bootstrap.pypa.io/get-pip.py", script)
+                ok, out = run([PYS, script], timeout=180)
+                if not ok:
+                    say(f"!! pip bootstrap failed: {out[-1500:]}")
+                    return False
+        except Exception as e:
+            say(f"!! get-pip failed: {e}")
+            return False
+    return True
