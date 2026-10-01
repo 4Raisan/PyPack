@@ -313,3 +313,52 @@ def install_pkgs(pkgs, log=print, upgrade=True, progress=None):
         log(f"Done: {p} {installed_ver(p) or ''}".strip())
     return True
 
+
+def update_all(log=print, progress=None):
+    """Update essentials + all installed pkgs to latest on every run."""
+    def say(m, p=None):
+        log(m)
+        if progress:
+            try:
+                progress(p or m)
+            except Exception:
+                pass
+    say("Updating everything to latest...", "Updating everything")
+    if not ensure_essentials(log, progress):
+        return False
+    ok, out = run(pip_cmd("list", "--format=freeze"), timeout=60)
+    if not ok:
+        say("!! could not list packages.")
+        return False
+    pkgs = [l.split("==")[0] for l in out.splitlines() if "==" in l
+            and not l.lower().startswith(("pip==", "setuptools==", "wheel=="))]
+    if not pkgs:
+        say("Nothing else to update.")
+        return True
+    say(f"Found {len(pkgs)} packages. Updating one by one...", f"Updating {len(pkgs)} packages")
+    good, bad = 0, []
+    for i, p in enumerate(pkgs, 1):
+        if progress:
+            try:
+                progress(f"Updating {i}/{len(pkgs)}: {p}")
+            except Exception:
+                pass
+        okp, outp = run(pip_cmd("install", "--upgrade", "-q", p,
+                                "--disable-pip-version-check"), timeout=600)
+        if okp:
+            good += 1
+        else:
+            bad.append(p)
+            say(f"Skipped {p}: {outp[-1500:]}")
+    say(f"Done: {good} updated" + (f", {len(bad)} skipped: {', '.join(bad)}" if bad else "."))
+    return not bad
+
+
+def open_python_download(log=print):
+    url = "https://www.python.org/downloads/"
+    if OS == "Darwin":
+        url = "https://www.python.org/downloads/macos/"
+    log(f">> Get/Update Python: {url}")
+    log(">> Win: winget install Python.Python.3.12 | Mac: brew install python | Linux: sudo apt install python3 python3-pip")
+    webbrowser.open(url)
+
