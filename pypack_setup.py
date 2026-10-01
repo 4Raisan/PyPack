@@ -490,4 +490,93 @@ def launch_gui(auto_update=False):
     status_label = ttk.Label(root, textvariable=status, style="Sub.TLabel", padding=(14, 5, 14, 8), wraplength=600)
     status_label.grid(row=5, column=0, sticky="ew")
 
+    state = {"busy": False, "closed": False, "search": 0, "poll": None}
+    callbacks = queue.Queue()
+    def schedule(fn):
+        if not state["closed"]:
+            callbacks.put(fn)
+    def log(message):
+        message = str(message)
+        print(message, flush=True)
+        schedule(lambda: _w(logbox, message))
+    def poll():
+        for _ in range(100):
+            try:
+                fn = callbacks.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                fn()
+            except Exception as error:
+                # One failed callback must not stop every future GUI update.
+                log(f"!! Interface error: {error}")
+        if not state["closed"]:
+            state["poll"] = root.after(30, poll)
+    checked = set()
+    def resize(event):
+        if event.widget is root:
+            status_label.configure(wraplength=max(200, event.width - 28))
+    root.bind("<Configure>", resize)
+    def update_selection():
+        n = len(checked)
+        selection.set(f"{n} checked" if n else "Check packages to install.")
+        install_button.configure(text=f"Install ({n})" if n else "Install")
+        install_button.configure(state="disabled" if state["busy"] or (tree.get_children() and not n) else "normal")
+    def toggle_package(event):
+        if state["busy"]:
+            return "break"
+        item = tree.focus() if event.keysym == "space" else tree.identify_row(event.y)
+        if not item:
+            return
+        if item in checked:
+            checked.remove(item)
+        else:
+            checked.add(item)
+        tree.item(item, text="☑" if item in checked else "☐")
+        tree.focus_set()
+        tree.focus(item)
+        tree.selection_set(item)
+        update_selection()
+        return "break"
+    tree.bind("<Button-1>", toggle_package)
+    tree.bind("<space>", toggle_package)
+    def busy(value, message=""):
+        state["busy"] = value
+        for widget in controls:
+            widget.configure(state="disabled" if value else "normal")
+        if value:
+            progressbar.pack(side="right")
+            progressbar.start(12)
+        else:
+            progressbar.stop()
+            progressbar.pack_forget()
+        update_selection()
+        if message:
+            status.set(message)
+    def progress(message):
+        schedule(lambda: status.set(str(message)))
+    def refresh_info():
+        version = pip_ver()
+        schedule(lambda: info.set(f"Python {py_ver()}  |  pip {version}  |  {OS}"))
+    def start(message, fn, done_message="Done."):
+        if state["busy"]:
+            return
+        busy(True, message)
+        def worker():
+            try:
+                ok = fn(log, progress)
+                result = done_message if ok else "Operation failed. See Activity for details."
+            except Exception as error:
+                log(f"!! {error}")
+                result = "Operation failed. See Activity for details."
+            schedule(lambda: busy(False, result))
+            refresh_info()
+        threading.Thread(target=worker, daemon=True).start()
+    def confirm_update():
+        if state["busy"]:
+            return
+        if messagebox.askyesno(APP, "Update every installed package to latest?\nThis can take a while."):
+            start("Updating packages…", update_all, "Packages updated.")
+    def normalized(name):
+        return re.sub(r"[-_.]+", "-", name).lower()
 
