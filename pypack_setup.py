@@ -266,3 +266,22 @@ def installed_ver(pkg):
             return line.split(":", 1)[1].strip()
     return "?"
 
+
+def latest_ver(pkg):
+    ok, out = run(pip_cmd("index", "versions", pkg.strip(),
+                          "--disable-pip-version-check"), timeout=30)
+    if ok and out:
+        for line in out.splitlines():
+            if "LATEST:" in line.upper():
+                return line.split(":")[-1].strip()
+        first = out.splitlines()[0]
+        if "(" in first and ")" in first:
+            return first.split("(")[1].split(")")[0].strip()
+    try:
+        req = urlreq.Request(f"https://pypi.org/pypi/{pkg}/json",
+                             headers={"User-Agent": "PyPack/1.0"})
+        with urlreq.urlopen(req, timeout=8) as r:
+            return json.load(r)["info"]["version"]
+    except Exception:
+        return None
+
