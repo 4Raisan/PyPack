@@ -222,4 +222,28 @@ def search_pypi(name, limit=20):
     except Exception:
         pass
     # Slow lanes: exact name via pip, then JSON, then installed-fuzzy.
-    return []
+    ok, outp = run(pip_cmd("index", "versions", name,
+                           "--disable-pip-version-check"), timeout=30)
+    if ok and outp and outp.splitlines():
+        for line in outp.splitlines():
+            match = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s+\([^)]+\)", line)
+            if match:
+                return [match.group(1)]
+    try:
+        req = urlreq.Request(f"https://pypi.org/pypi/{name}/json",
+                             headers={"User-Agent": "PyPack/1.0"})
+        with urlreq.urlopen(req, timeout=8) as r:
+            return [json.load(r)["info"]["name"]]
+    except Exception:
+        pass
+    import difflib
+    cands = []
+    try:
+        ok2, lst = run(pip_cmd("list", "--format=freeze"), timeout=60)
+        if ok2:
+            installed = [l.split("==")[0] for l in lst.splitlines() if "==" in l]
+            cands = difflib.get_close_matches(name, installed, n=limit, cutoff=0.6)
+    except Exception:
+        pass
+    return cands or []
+
