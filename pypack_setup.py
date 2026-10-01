@@ -362,3 +362,96 @@ def open_python_download(log=print):
     log(">> Win: winget install Python.Python.3.12 | Mac: brew install python | Linux: sudo apt install python3 python3-pip")
     webbrowser.open(url)
 
+
+def launch_gui(auto_update=False):
+    """Optional compact package browser with an always-visible activity terminal."""
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+    import re
+
+    root = tk.Tk()
+    root.title(APP)
+    icon = resource_path("assets/pypack-icon.png")
+    if icon.exists():
+        root._app_icon = tk.PhotoImage(file=str(icon))
+        root.iconphoto(True, root._app_icon)
+    root.minsize(480, 1)
+    BG, CARD, FG, SUB, AC = "#0e1117", "#161b26", "#e8eaf0", "#8b90a5", "#6c5ce7"
+    root.configure(background=BG)
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(4, weight=1)
+    st = ttk.Style(root)
+    try:
+        st.theme_use("clam")
+    except tk.TclError:
+        pass
+    st.configure(".", background=BG, foreground=FG, font=("Segoe UI", 10))
+    st.configure("TFrame", background=BG)
+    st.configure("Card.TFrame", background=CARD)
+    st.configure("TLabel", background=BG, foreground=FG)
+    st.configure("Sub.TLabel", foreground=SUB)
+    st.configure("Title.TLabel", font=("Segoe UI Semibold", 18), foreground="#a29bfe")
+    st.configure("TButton", background="#232a3b", foreground=FG, padding=(10, 5), borderwidth=0)
+    st.map("TButton", background=[("active", "#2e3750")], foreground=[("disabled", "#656b80")])
+    st.configure("Accent.TButton", background=AC, foreground="white")
+    st.map("Accent.TButton", background=[("disabled", "#232a3b"), ("active", "#7f71f0")])
+    st.configure("TEntry", fieldbackground="#1a2030", foreground=FG, insertcolor=FG, padding=6)
+    st.configure("Treeview", background="#1a2030", fieldbackground="#1a2030", foreground=FG,
+                 rowheight=26, borderwidth=0)
+    st.configure("Treeview.Heading", background="#232a3b", foreground=SUB, padding=(8, 5))
+    st.map("Treeview", background=[("selected", AC)], foreground=[("selected", "white")])
+    st.configure("TScrollbar", background="#2e3750", troughcolor=CARD, arrowcolor=SUB, borderwidth=0)
+
+    status = tk.StringVar(value="Ready. Search for packages, fix pip, or update packages.")
+    info = tk.StringVar(value=f"Python {py_ver()}  |  checking pip…  |  {OS}")
+    count = tk.StringVar(value="Search results")
+    selection = tk.StringVar(value="Select packages, then Install.")
+    head = ttk.Frame(root, padding=(14, 10, 14, 4))
+    head.grid(row=0, column=0, sticky="ew")
+    ttk.Label(head, text=APP, style="Title.TLabel").pack(side="left")
+    ttk.Label(head, textvariable=info, style="Sub.TLabel", font=("Segoe UI", 9)).pack(side="right")
+
+    toolbar = ttk.Frame(root, padding=(14, 4, 14, 8))
+    toolbar.grid(row=1, column=0, sticky="ew")
+    controls = []
+    def button(parent, text, command, accent=False):
+        widget = ttk.Button(parent, text=text, command=command,
+                            style="Accent.TButton" if accent else "TButton")
+        controls.append(widget)
+        return widget
+    button(toolbar, "Fix pip", lambda: start("Fixing pip", ensure_essentials)).pack(side="left", padx=(0, 6))
+    button(toolbar, "Update all", lambda: confirm_update()).pack(side="left", padx=(0, 6))
+    button(toolbar, "Get Python", lambda: open_python_download(log)).pack(side="left")
+
+    browser = ttk.Frame(root, padding=(14, 0, 14, 0))
+    browser.grid(row=2, column=0, sticky="nsew")
+    browser.columnconfigure(0, weight=1)
+    searchrow = ttk.Frame(browser)
+    searchrow.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+    entry = ttk.Entry(searchrow)
+    entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+    controls.append(entry)
+    button(searchrow, "Search", lambda: do_search(), True).pack(side="right")
+    ttk.Label(browser, textvariable=count, style="Sub.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 5))
+    results = ttk.Frame(browser)
+    results.grid(row=2, column=0, sticky="nsew")
+    results.rowconfigure(0, weight=1)
+    results.columnconfigure(0, weight=1)
+    tree = ttk.Treeview(results, columns=("name",), show="tree headings", selectmode="browse", height=3)
+    tree.heading("#0", text="")
+    tree.column("#0", width=32, minwidth=32, stretch=False, anchor="center")
+    tree.heading("name", text="Package")
+    tree.column("name", width=320, minwidth=120, anchor="w")
+    tree.tag_configure("inst", foreground="#7ee787")
+    tree.grid(row=0, column=0, sticky="nsew")
+    scrollbar = ttk.Scrollbar(results, orient="vertical", command=tree.yview)
+    scrollbar.grid(row=0, column=1, sticky="ns")
+    tree.configure(yscrollcommand=scrollbar.set)
+    results.grid_remove()
+    installrow = ttk.Frame(browser)
+    installrow.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+    installrow.grid_remove()
+    install_button = button(installrow, "Install", lambda: do_install_at(), True)
+    install_button.pack(side="right")
+    ttk.Label(installrow, textvariable=selection, style="Sub.TLabel").pack(side="left", fill="x", expand=True)
+
