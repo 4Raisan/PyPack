@@ -285,3 +285,31 @@ def latest_ver(pkg):
     except Exception:
         return None
 
+
+def install_pkgs(pkgs, log=print, upgrade=True, progress=None):
+    pkgs = [(p or "").strip() for p in (pkgs or [])]
+    pkgs = [p for p in pkgs if p]
+    if not pkgs:
+        log("!! nothing to install (empty name).")
+        return False
+    if not can_modify_environment(log):
+        return False
+    if any(p.startswith("-") for p in pkgs):
+        log("!! Pass package names or requirements, not pip options.")
+        return False
+    args = ["install", "-q"] + (["--upgrade"] if upgrade else []) + ["--"] + pkgs
+    log(f"Installing {', '.join(pkgs)} ...")
+    if progress:
+        try:
+            progress("Installing " + ", ".join(pkgs))
+        except Exception:
+            pass
+    ok, out = run(pip_cmd(*args), timeout=900)
+    if not ok:  # quiet hid the reason, show tail only on failure
+        log(out[-1500:] if len(out) > 1500 else out)
+        log(f"!! install failed for: {', '.join(pkgs)} (name wrong? no net? no compiler?)")
+        return False
+    for p in pkgs:
+        log(f"Done: {p} {installed_ver(p) or ''}".strip())
+    return True
+
