@@ -579,4 +579,60 @@ def launch_gui(auto_update=False):
             start("Updating packages…", update_all, "Packages updated.")
     def normalized(name):
         return re.sub(r"[-_.]+", "-", name).lower()
+    def do_search():
+        if state["busy"]:
+            return
+        query = entry.get().strip()
+        if not query:
+            status.set("Type a package name first, e.g. pandas or pillow.")
+            return
+        state["search"] += 1
+        token = state["search"]
+        busy(True, f"Searching for {query}…")
+        count.set(f"Searching for {query}…")
+        def fill(names, error):
+            if token != state["search"]:
+                return
+            children = tree.get_children()
+            if children:
+                tree.delete(*children)
+            checked.clear()
+            tree.configure(height=max(1, min(5, len(names))))
+            installrow.grid()
+            for name in names:
+                tree.insert("", "end", iid=name, text="☐", values=(name,))
+            if names:
+                results.grid()
+                tree.see(names[0])
+            if not names:
+                results.grid_remove()
+            count.set(f"{len(names)} results for ‘{query}’")
+            message = error or (f"Found {len(names)} packages. Check one or more to install." if names
+                               else f"No match for ‘{query}’. Install can try the exact name.")
+            update_selection()
+            busy(False, message)
+        def annotate(names, installed):
+            if token != state["search"]:
+                return
+            installed = {normalized(name) for name in installed}
+            for name in names:
+                if tree.exists(name) and normalized(name) in installed:
+                    tree.item(name, values=(name + "  (installed)",), tags=("inst",))
+        def worker():
+            log(f"Searching '{query}' …")
+            try:
+                names = list(dict.fromkeys(search_pypi(query)))
+                error = None
+                log(f"Search done: {len(names)} candidates")
+            except Exception as exc:
+                names, error = [], f"Search failed: {exc}"
+                log(error)
+            schedule(lambda: fill(names, error))
+            if names:
+                try:
+                    installed = installed_set()
+                    schedule(lambda: annotate(names, installed))
+                except Exception as exc:
+                    log(f"Could not check installed packages: {exc}")
+        threading.Thread(target=worker, daemon=True).start()
 
