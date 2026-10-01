@@ -75,6 +75,22 @@ def pip_ver(refresh=False):
     return _PIPVER
 
 
+def log_fn(msg, widget=None):
+    print(msg, flush=True)
+    if widget is not None:
+        try:
+            widget.after(0, lambda: (_w(widget, msg)))
+        except Exception:
+            pass
+
+
+def _w(widget, msg):
+    widget.configure(state="normal")
+    widget.insert("end", msg + "\n")
+    widget.see("end")
+    widget.configure(state="disabled")
+
+
 def can_modify_environment(log=print):
     """Respect OS-managed Python; do not override its package protection."""
     import sysconfig
@@ -454,4 +470,24 @@ def launch_gui(auto_update=False):
     install_button = button(installrow, "Install", lambda: do_install_at(), True)
     install_button.pack(side="right")
     ttk.Label(installrow, textvariable=selection, style="Sub.TLabel").pack(side="left", fill="x", expand=True)
+
+    activitybar = ttk.Frame(root, padding=(14, 8, 14, 4))
+    activitybar.grid(row=3, column=0, sticky="ew")
+    ttk.Label(activitybar, text="Activity", style="Sub.TLabel").pack(side="left")
+    progressbar = ttk.Progressbar(activitybar, mode="indeterminate", length=100)
+    progressbar.pack(side="right")
+    progressbar.pack_forget()
+    activity = ttk.Frame(root, padding=(14, 0, 14, 0))
+    activity.grid(row=4, column=0, sticky="nsew")
+    activity.columnconfigure(0, weight=1)
+    activity.rowconfigure(0, weight=1)
+    logbox = tk.Text(activity, width=60, height=4, state="disabled", wrap="word", font=("Consolas", 9),
+                     relief="flat", bg="#1a2030", fg="#c9d1e3", insertbackground=FG)
+    logbox.grid(row=0, column=0, sticky="nsew")
+    logscroll = ttk.Scrollbar(activity, orient="vertical", command=logbox.yview)
+    logscroll.grid(row=0, column=1, sticky="ns")
+    logbox.configure(yscrollcommand=logscroll.set)
+    status_label = ttk.Label(root, textvariable=status, style="Sub.TLabel", padding=(14, 5, 14, 8), wraplength=600)
+    status_label.grid(row=5, column=0, sticky="ew")
+
 
