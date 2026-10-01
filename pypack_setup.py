@@ -247,3 +247,22 @@ def search_pypi(name, limit=20):
         pass
     return cands or []
 
+
+def installed_set():
+    """Lowercase names of all installed packages (one pip call)."""
+    ok, out = run(pip_cmd("list", "--format=freeze",
+                          "--disable-pip-version-check"), timeout=30)
+    if not ok:
+        return set()
+    return {l.split("==")[0].lower() for l in out.splitlines() if "==" in l}
+
+
+def installed_ver(pkg):
+    ok, out = run(pip_cmd("show", pkg), timeout=30)
+    if not ok:
+        return None
+    for line in out.splitlines():
+        if line.lower().startswith("version:"):
+            return line.split(":", 1)[1].strip()
+    return "?"
+
