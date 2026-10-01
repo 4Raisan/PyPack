@@ -635,4 +635,34 @@ def launch_gui(auto_update=False):
                 except Exception as exc:
                     log(f"Could not check installed packages: {exc}")
         threading.Thread(target=worker, daemon=True).start()
+    def do_install_at(event=None):
+        if state["busy"]:
+            return
+        names = [name for name in tree.get_children() if name in checked]
+        if not names and tree.get_children():
+            status.set("Check one or more packages first.")
+            return
+        if not names:
+            names = [entry.get().strip()]
+        names = [name for name in names if name]
+        if not names:
+            status.set("Select a package or type its exact name first.")
+            return
+        start("Installing " + ", ".join(names),
+              lambda log, progress: install_pkgs(names, log, True, progress), "Installation complete.")
+    def close():
+        state["closed"] = True
+        if state["poll"] is not None:
+            root.after_cancel(state["poll"])
+        root.destroy()
+    root.protocol("WM_DELETE_WINDOW", close)
+    entry.bind("<Return>", lambda event: do_search())
+    entry.focus_set()
+    state["poll"] = root.after(30, poll)
+    log(f"{APP} ready. Python {py_ver()}.")
+    log(f"Package target: {PYS}")
+    threading.Thread(target=refresh_info, daemon=True).start()
+    if auto_update:
+        start("Updating packages…", update_all, "Packages updated.")
+    root.mainloop()
 
