@@ -667,6 +667,10 @@ def launch_gui(auto_update=False):
     root.mainloop()
 
 
+def resource_path(name):
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / name
+
+
 def select_python(path):
     """Validate a real interpreter and cache its environment, never this EXE."""
     global PYS, _TARGET_INFO, _PIPVER
@@ -712,4 +716,36 @@ def discover_python():
         if candidate and select_python(candidate):
             return True
     return False
+
+
+def prepare_python(gui):
+    if discover_python():
+        return True
+    if not gui:
+        print("No Python 3.10+ found. Set PYPACK_PYTHON to a real interpreter path.")
+        return False
+    import tkinter as tk
+    from tkinter import filedialog, messagebox
+    dialog = tk.Tk()
+    dialog.withdraw()
+    try:
+        if OS == "Windows":
+            choice = messagebox.askyesnocancel(APP, "Python 3.10+ is required to install packages.\n\nYes: install Python\nNo: choose an existing Python\nCancel: close", parent=dialog)
+            if choice is None:
+                return False
+            if choice:
+                messagebox.showinfo(APP, "Python will now install. This can take a few minutes.\nPyPack will open when installation finishes.", parent=dialog)
+                ok, output = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(resource_path("pypack-bootstrap.ps1"))], timeout=900)
+                if ok and discover_python():
+                    return True
+                messagebox.showerror(APP, "Python installation did not finish successfully.\n" + output[-1000:], parent=dialog)
+                return False
+        path = filedialog.askopenfilename(parent=dialog, title="Choose Python 3.10+", filetypes=[("Python executable", "*.exe"), ("All files", "*")])
+        if path and select_python(path):
+            return True
+        if path:
+            messagebox.showerror(APP, "That file is not a supported Python interpreter.", parent=dialog)
+        return False
+    finally:
+        dialog.destroy()
 
