@@ -15,7 +15,6 @@ _RUN_LOCK = threading.RLock()
 OS = platform.system()  # Windows, Darwin, Linux
 _PIPVER = None  # cache: pip version changes only after ensure_essentials
 
-
 def run(cmd, timeout=180):
     """Run cmd list, return (ok, out+err). Uses current Python when pip."""
     try:
@@ -38,12 +37,10 @@ def run(cmd, timeout=180):
     except Exception as e:
         return False, str(e)
 
-
 def pip_cmd(*args):
     if not PYS:
         raise RuntimeError("Choose a Python interpreter first.")
     return [PYS, "-m", "pip", "--disable-pip-version-check", "--no-input", *args]
-
 
 def has_net(timeout=6):
     try:  # tiny read + close: avoids hanging on throttled simple index
@@ -54,10 +51,8 @@ def has_net(timeout=6):
     except Exception:
         return False
 
-
 def py_ver():
     return _TARGET_INFO["version"] if _TARGET_INFO else platform.python_version()
-
 
 def pip_ver(refresh=False):
     """pip version, cached so each GUI log line doesn't spawn a subprocess."""
@@ -74,7 +69,6 @@ def pip_ver(refresh=False):
         _PIPVER = "missing"
     return _PIPVER
 
-
 def log_fn(msg, widget=None):
     print(msg, flush=True)
     if widget is not None:
@@ -83,13 +77,11 @@ def log_fn(msg, widget=None):
         except Exception:
             pass
 
-
 def _w(widget, msg):
     widget.configure(state="normal")
     widget.insert("end", msg + "\n")
     widget.see("end")
     widget.configure(state="disabled")
-
 
 def can_modify_environment(log=print):
     """Respect OS-managed Python; do not override its package protection."""
@@ -101,7 +93,6 @@ def can_modify_environment(log=print):
         log(f'   "{PYS}" -m venv .venv')
         return False
     return True
-
 
 def ensure_essentials(log=print, progress=None):
     """Replaces 'after python': ensure pip + upgrade pip/setuptools/wheel."""
@@ -145,7 +136,6 @@ def ensure_essentials(log=print, progress=None):
     say(f"Ready. pip {pip_ver(refresh=True)}")
     return True
 
-
 def _pypi_names():
     """All PyPI project names, cached on disk and refreshed every 12h."""
     import time, gzip
@@ -176,7 +166,6 @@ def _pypi_names():
         pass
     return names
 
-
 def _pypi_popularity():
     """Project names ordered by recent downloads (hugovk top-pypi-packages,
     ~0.8MB), cached on disk and refreshed every 12h."""
@@ -206,7 +195,6 @@ def _pypi_popularity():
         return names
     except Exception:
         return None
-
 
 def search_pypi(name, limit=20):
     """Light PyPI search via stdlib only. Returns [names] (best first)."""
@@ -263,7 +251,6 @@ def search_pypi(name, limit=20):
         pass
     return cands or []
 
-
 def installed_set():
     """Lowercase names of all installed packages (one pip call)."""
     ok, out = run(pip_cmd("list", "--format=freeze",
@@ -271,7 +258,6 @@ def installed_set():
     if not ok:
         return set()
     return {l.split("==")[0].lower() for l in out.splitlines() if "==" in l}
-
 
 def installed_ver(pkg):
     ok, out = run(pip_cmd("show", pkg), timeout=30)
@@ -281,7 +267,6 @@ def installed_ver(pkg):
         if line.lower().startswith("version:"):
             return line.split(":", 1)[1].strip()
     return "?"
-
 
 def latest_ver(pkg):
     ok, out = run(pip_cmd("index", "versions", pkg.strip(),
@@ -300,7 +285,6 @@ def latest_ver(pkg):
             return json.load(r)["info"]["version"]
     except Exception:
         return None
-
 
 def install_pkgs(pkgs, log=print, upgrade=True, progress=None):
     pkgs = [(p or "").strip() for p in (pkgs or [])]
@@ -328,7 +312,6 @@ def install_pkgs(pkgs, log=print, upgrade=True, progress=None):
     for p in pkgs:
         log(f"Done: {p} {installed_ver(p) or ''}".strip())
     return True
-
 
 def update_all(log=print, progress=None):
     """Update essentials + all installed pkgs to latest on every run."""
@@ -369,7 +352,6 @@ def update_all(log=print, progress=None):
     say(f"Done: {good} updated" + (f", {len(bad)} skipped: {', '.join(bad)}" if bad else "."))
     return not bad
 
-
 def open_python_download(log=print):
     url = "https://www.python.org/downloads/"
     if OS == "Darwin":
@@ -377,7 +359,6 @@ def open_python_download(log=print):
     log(f">> Get/Update Python: {url}")
     log(">> Win: winget install Python.Python.3.12 | Mac: brew install python | Linux: sudo apt install python3 python3-pip")
     webbrowser.open(url)
-
 
 def launch_gui(auto_update=False):
     """Optional compact package browser with an always-visible activity terminal."""
@@ -666,7 +647,6 @@ def launch_gui(auto_update=False):
         start("Updating packages…", update_all, "Packages updated.")
     root.mainloop()
 
-
 def resource_path(name):
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / name
 
@@ -749,3 +729,74 @@ def prepare_python(gui):
     finally:
         dialog.destroy()
 
+
+def main(argv):
+    """Return a process status; dispatch only the first argument as a command."""
+    if sys.version_info < (3, 10):
+        print(f"!! Python {py_ver()} too old (need 3.10+). Opening download page...")
+        open_python_download()
+        return 1
+    args = argv[1:]
+    if len(args) == 2 and args[0] == "--self-test":
+        report = {"frozen": FROZEN, "ok": False}
+        try:
+            if not prepare_python(False):
+                raise RuntimeError("No supported target Python found")
+            import tkinter as tk
+            test_root = tk.Tk()
+            test_root.withdraw()
+            try:
+                image = tk.PhotoImage(file=str(resource_path("assets/pypack-icon.png")))
+                test_root.iconphoto(True, image)
+                report.update(python=PYS, version=py_ver(), pip=pip_ver(),
+                              icon_size=[image.width(), image.height()],
+                              tcl=test_root.tk.call("info", "patchlevel"),
+                              self_recursion=os.path.normcase(PYS) == os.path.normcase(sys.executable))
+                report["ok"] = report["pip"] != "missing" and not (FROZEN and report["self_recursion"])
+            finally:
+                test_root.destroy()
+        except Exception as error:
+            report["error"] = str(error)
+        Path(args[1]).write_text(json.dumps(report, indent=2), encoding="utf-8")
+        return 0 if report["ok"] else 1
+    if FROZEN or os.environ.get("PYPACK_PYTHON"):
+        if not prepare_python(not args or args[0].lower() in ("--gui", "--update", "--auto-update")):
+            return 1
+    command = args[0].lower() if args else "--gui"
+    if command == "--gui" or (len(args) == 1 and command in ("--update", "--auto-update")):
+        if any(arg.lower() not in ("--gui", "--update", "--auto-update") for arg in args):
+            print("!! Unknown GUI option.")
+            return 2
+        try:
+            launch_gui(auto_update=any(arg.lower() in ("--update", "--auto-update") for arg in args))
+            return 0
+        except Exception as error:
+            print(f"GUI unavailable ({error}). Install tkinter or use the CLI:")
+            print(f"  {PYS} pypack_setup.py fix | update-all | search <query> | install <packages>")
+            return 1
+    if command in ("fix", "essentials", "update-all", "update", "get-python"):
+        if len(args) != 1:
+            print(f"!! {command} does not accept extra arguments.")
+            return 2
+        if command == "get-python":
+            open_python_download()
+            return 0
+        operation = ensure_essentials if command in ("fix", "essentials") else update_all
+        return 0 if operation() else 1
+    if command == "search":
+        if len(args) != 2 or not args[1].strip():
+            print("Usage: pypack_setup.py search <query>")
+            return 2
+        print(search_pypi(args[1]))
+        return 0
+    if command == "install":
+        if len(args) < 2:
+            print("Usage: pypack_setup.py install <package> [more packages]")
+            return 2
+        return 0 if install_pkgs(args[1:]) else 1
+    print("Usage: pypack_setup.py [--gui] [--update] | fix | update-all | search <query> | install <packages> | get-python")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
