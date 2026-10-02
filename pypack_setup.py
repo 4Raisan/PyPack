@@ -666,3 +666,50 @@ def launch_gui(auto_update=False):
         start("Updating packages…", update_all, "Packages updated.")
     root.mainloop()
 
+
+def select_python(path):
+    """Validate a real interpreter and cache its environment, never this EXE."""
+    global PYS, _TARGET_INFO, _PIPVER
+    if not path or (FROZEN and os.path.normcase(os.path.abspath(path)) == os.path.normcase(sys.executable)):
+        return False
+    probe = ("import sys,os,json,platform,sysconfig; "
+             "print(json.dumps({'path':sys.executable,'version':platform.python_version(),"
+             "'supported':sys.version_info >= (3,10),'managed':sys.prefix == sys.base_prefix and "
+             "os.path.isfile(os.path.join(sysconfig.get_path('stdlib'),'EXTERNALLY-MANAGED'))}))")
+    ok, output = run([str(path), "-c", probe], timeout=15)
+    if not ok:
+        return False
+    try:
+        info = json.loads(output.strip())
+        if not info["supported"]:
+            return False
+        PYS, _TARGET_INFO, _PIPVER = info["path"], info, None
+        return True
+    except (ValueError, KeyError):
+        return False
+
+
+def discover_python():
+    candidates = []
+    if os.environ.get("PYPACK_PYTHON"):
+        candidates.append(os.environ["PYPACK_PYTHON"])
+    if os.environ.get("VIRTUAL_ENV"):
+        candidates.append(str(Path(os.environ["VIRTUAL_ENV"]) / ("Scripts/python.exe" if OS == "Windows" else "bin/python")))
+    if not FROZEN:
+        candidates.append(sys.executable)
+    if OS == "Windows":
+        # Prefer actual executables over Store execution aliases on PATH.
+        for base in (Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Programs/Python",
+                     Path(os.environ.get("ProgramFiles", "C:/Program Files"))):
+            candidates.extend(str(item) for item in sorted(base.glob("Python*/python.exe"), reverse=True))
+        launcher = shutil.which("py")
+        if launcher:
+            ok, output = run([launcher, "-3", "-c", "import sys; print(sys.executable)"], timeout=15)
+            if ok:
+                candidates.append(output.strip())
+    candidates.extend(shutil.which(name) for name in ("python3", "python"))
+    for candidate in dict.fromkeys(candidates):
+        if candidate and select_python(candidate):
+            return True
+    return False
+
