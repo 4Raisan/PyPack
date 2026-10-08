@@ -1,19 +1,34 @@
 # PyPack
 
-## For users
+![PyPack](assets/pypack-logo.png)
 
-- Windows: open **PyPack.exe**. The GUI and square logo are bundled. Python 3.10+ is detected automatically; if missing, PyPack offers to install it or select an existing interpreter.
-- Linux/macOS: run **sh PyPack.sh**. This is a single-file launcher containing the application and icon. Requires Python 3.10+ and tkinter. On macOS, **PyPack.command** can also launch it after `chmod +x PyPack.command`.
+A compact Python package manager. Search PyPI, check one or several packages, then install them. Fix pip or update installed packages from the same window.
 
-The ready-to-use files are in `releases`: `PyPack.exe` for Windows, `PyPack.sh` for Linux/macOS, and `PyPack.command` for macOS.
+## Download
 
-Search for a package, check one or several results, then click Install. The window starts compact. Activity shows progress and the exact Python path receiving packages. Startup does not install or upgrade packages automatically.
+Choose **one** file for your operating system from the [latest release](https://github.com/4Raisan/PyPack/releases/latest):
 
-Activate your virtual environment before launching PyPack to use it. OS-managed Python must use a virtual environment. Advanced users can set `PYPACK_PYTHON` to a Python executable path.
+| Platform | Download | Start |
+| --- | --- | --- |
+| Windows 64-bit | [PyPack.exe](https://github.com/4Raisan/PyPack/releases/latest/download/PyPack.exe) | Double-click the executable. |
+| Linux or macOS | [PyPack.sh](https://github.com/4Raisan/PyPack/releases/latest/download/PyPack.sh) | Run `sh PyPack.sh` in a terminal. |
+| macOS alternative | [PyPack.command](https://github.com/4Raisan/PyPack/releases/latest/download/PyPack.command) | Run `chmod +x PyPack.command`, then double-click. |
 
-## Source launchers
+Each launcher contains the application and square icon. You do not need the source files, a separate logo, or the `.bat`/`.ps1` helpers to use these downloads. Windows bundles its Python-install helper and Tcl/Tk GUI runtime; it detects Python 3.10+ or offers to install/select it when missing. Linux/macOS require Python 3.10+ and tkinter.
 
-Keep `pypack_setup.py`, `PyPack-Setup.bat`, `pypack-bootstrap.ps1`, `pypack-setup.sh`, and `assets` together. Double-click the batch launcher on Windows, or run `sh pypack-setup.sh` on Linux/macOS.
+## Use
+
+1. Open PyPack and search for a package, such as `panda`.
+2. Check the packages you want to install.
+3. Click **Install** and follow the Activity log.
+
+The window starts compact; the empty results table takes no space. Activity shows the exact Python interpreter receiving packages. Opening PyPack does not upgrade packages automatically.
+
+Activate a virtual environment before launching to use it. OS-managed Python requires a virtual environment. You can also set `PYPACK_PYTHON` to a Python executable path. Package installs/upgrades can change that environment's dependencies.
+
+## Run from source
+
+Keep `pypack_setup.py`, `PyPack-Setup.bat`, `pypack-bootstrap.ps1`, `pypack-setup.sh`, and `assets` together. On Windows, double-click `PyPack-Setup.bat`; on Linux/macOS, run `sh pypack-setup.sh`.
 
 ```text
 python pypack_setup.py --gui
@@ -23,13 +38,12 @@ python pypack_setup.py fix
 python pypack_setup.py update-all
 ```
 
-Exit codes: 0 success, 1 operational failure, 2 invalid arguments. `--gui --update` explicitly upgrades packages on startup. Installing/upgrading packages can change the selected environment's dependencies.
+Exit codes: 0 success, 1 operational failure, 2 invalid arguments. `--gui --update` explicitly upgrades packages at startup.
 
-## Release notes
+## Verification
 
-The Windows build is a 64-bit executable with bundled Tcl/Tk. Package operations use an external Python interpreter, never the executable itself. The executable is unsigned. The Unix shell launcher has been checked under WSL; native Linux/macOS GUI and clean-machine Python installation still need release testing.
+The Windows executable passed an isolated runtime check with its bundled icon, Tcl/Tk, and bootstrap helper. GUI checks covered the compact layout, result checkboxes, and simulated single/multiple installs. Both Unix launchers passed syntax, argument forwarding, and exit-code checks under WSL.
 
-Square PNG and multi-size Windows ICO assets are in `assets`; the original wordmark is retained. The license is MIT.
+Native Linux/macOS desktop checks and clean-machine Python installation remain unverified. The Windows executable is unsigned. Script files use the operating system's default file icon; the running app displays the PyPack logo.
 
-Built with [PyInstaller](https://pyinstaller.org/en/stable/usage.html). No releases have been committed or pushed automatically.
-
+Built with [PyInstaller](https://pyinstaller.org/en/stable/usage.html). [MIT licensed](LICENSE).
