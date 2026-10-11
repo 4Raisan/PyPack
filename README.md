@@ -1,6 +1,6 @@
 # PyPack
 
-![PyPack](assets/pypack-logo.png)
+<p align="center"><img src="assets/pypack-logo.png" alt="PyPack" width="440"></p>
 
 A compact Python package manager. Search PyPI, check one or several packages, then install them. Fix pip or update installed packages from the same window.
 
@@ -25,6 +25,10 @@ Each launcher contains the application and square icon. You do not need the sour
 The window starts compact; the empty results table takes no space. Activity shows the exact Python interpreter receiving packages. Opening PyPack does not upgrade packages automatically.
 
 Activate a virtual environment before launching to use it. OS-managed Python requires a virtual environment. You can also set `PYPACK_PYTHON` to a Python executable path. Package installs/upgrades can change that environment's dependencies.
+
+## How it works
+
+![PyPack architecture](assets/architecture.svg)
 
 ## Run from source
 
