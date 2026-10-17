@@ -46,8 +46,16 @@ Exit codes: 0 success, 1 operational failure, 2 invalid arguments. `--gui --upda
 
 ## Verification
 
-The Windows executable passed an isolated runtime check with its bundled icon, Tcl/Tk, and bootstrap helper. GUI checks covered the compact layout, result checkboxes, and simulated single/multiple installs. Both Unix launchers passed syntax, argument forwarding, and exit-code checks under WSL.
+Run `python -m unittest discover -s tests -v` for offline checks of command routing, interpreter selection, protected environments, package-operation failures and release packaging. GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14. Tests use simulated package operations and do not install or upgrade packages.
+
+The release workflow builds the Windows executable, checks its bundled icon and Tcl/Tk with an external target Python, and checks standalone Unix argument forwarding and exit codes. Earlier manual GUI checks covered the compact layout, result checkboxes and simulated single/multiple installs.
 
 Native Linux/macOS desktop checks and clean-machine Python installation remain unverified. The Windows executable is unsigned. Script files use the operating system's default file icon; the running app displays the PyPack logo.
+
+## Build downloads
+
+Run `python scripts/build_release.py` to generate the Unix launchers, source ZIP and checksums in `dist/`. On Windows, install `requirements-build.txt` into a dedicated environment and add `--windows` to build the executable. Generated downloads are kept in GitHub Releases, outside the current source tree. Existing v0.1.0 downloads remain available.
+
+See the [development and release guide](docs/DEVELOPMENT.md) for build commands and the checked draft-release workflow.
 
 Built with [PyInstaller](https://pyinstaller.org/en/stable/usage.html). [MIT licensed](LICENSE).

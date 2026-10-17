@@ -18,3 +18,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Run offline regression checks
         run: python -m unittest discover -s tests -v
+      - name: Build source and Unix launchers
+        run: python scripts/build_release.py
+      - name: Parse Windows bootstrap
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'pypack-bootstrap.ps1'), [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
