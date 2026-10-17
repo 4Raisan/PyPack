@@ -35,6 +35,36 @@ class ReleaseTests(unittest.TestCase):
             self.assertFalse(any(name.startswith(prefix + folder) for name in names
                                  for folder in ("releases/", "dist/", "build/", ".git/")))
 
+    def test_extracted_source_rebuilds_without_git_metadata(self):
+        build.build_source(self.output)
+        version = (ROOT / "VERSION").read_text().strip()
+        with zipfile.ZipFile(self.output / f"PyPack-{version}-source.zip") as archive:
+            archive.extractall(self.root / "extracted")
+        extracted = self.root / "extracted" / f"PyPack-{version}-source"
+        rebuilt = self.root / "rebuilt"
+        rebuilt.mkdir()
+        with patch.object(build, "ROOT", extracted), patch.object(build.subprocess, "run") as run:
+            build.build_unix(rebuilt)
+            build.build_source(rebuilt)
+            build.write_checksums(rebuilt)
+            run.assert_not_called()
+        self.assertEqual((rebuilt / "PyPack.sh").read_bytes(), self._launcher_bytes())
+        self.assertEqual((rebuilt / f"PyPack-{version}-source.zip").read_bytes(),
+                         (self.output / f"PyPack-{version}-source.zip").read_bytes())
+
+    def _launcher_bytes(self):
+        build.build_unix(self.output)
+        return (self.output / "PyPack.sh").read_bytes()
+
+    def test_source_manifest_cannot_read_outside_the_project(self):
+        fixture = self.root / "source"
+        fixture.mkdir()
+        (fixture / "VERSION").write_text("0.1.1")
+        (fixture / "SOURCE_FILES.json").write_text(json.dumps(["../private.txt"]))
+        (self.root / "private.txt").write_text("private")
+        with patch.object(build, "ROOT", fixture), self.assertRaisesRegex(ValueError, "escapes"):
+            build.build_source(self.output)
+
     @unittest.skipIf(os.name == "nt" or not shutil.which("sh"), "Requires a native POSIX shell")
     def test_launchers_preserve_arguments_exit_codes_and_cleanup(self):
         fixture = self.root / "source with spaces"

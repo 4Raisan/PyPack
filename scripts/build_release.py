@@ -2,6 +2,7 @@
 import argparse
 import base64
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -70,18 +71,35 @@ def build_source(output):
     # Only version-controlled inputs belong in source downloads. Build after
     # committing changes so the source archive identifies a complete revision.
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True)
+    if (ROOT / ".git").exists():
+        result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True)
+        names = result.stdout.decode("utf-8").split("\0")
+    else:
+        manifest = ROOT / "SOURCE_FILES.json"
+        if not manifest.is_file():
+            raise RuntimeError("Use a Git checkout or the complete PyPack source ZIP.")
+        names = json.loads(manifest.read_text(encoding="utf-8"))
+        if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
+            raise ValueError("Invalid source-file manifest.")
+    names = sorted(set(name for name in names if name and name != "SOURCE_FILES.json"
+                       and not name.startswith(("releases/", "dist/", "build/", ".git/"))))
+
+    def add(archive, name, data):
+        info = zipfile.ZipInfo(f"PyPack-{version}-source/{name}", (1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        mode = 0o755 if name.endswith((".sh", ".command")) else 0o644
+        info.external_attr = (0o100000 | mode) << 16
+        archive.writestr(info, data)
+
     with zipfile.ZipFile(output / f"PyPack-{version}-source.zip", "w", zipfile.ZIP_DEFLATED) as archive:
-        for name in sorted(result.stdout.decode("utf-8").split("\0")):
-            if name and not name.startswith(("releases/", "dist/", "build/")):
-                path = ROOT / name
-                if not path.is_file():
-                    raise FileNotFoundError(f"Tracked source file is missing: {name}")
-                info = zipfile.ZipInfo(f"PyPack-{version}-source/{name}", (1980, 1, 1, 0, 0, 0))
-                info.compress_type = zipfile.ZIP_DEFLATED
-                mode = 0o755 if name.endswith((".sh", ".command")) else 0o644
-                info.external_attr = (0o100000 | mode) << 16
-                archive.writestr(info, path.read_bytes())
+        for name in names:
+            path = ROOT / name
+            if not path.resolve().is_relative_to(ROOT.resolve()) or "\\" in name:
+                raise ValueError(f"Source path escapes the project: {name}")
+            if not path.is_file():
+                raise FileNotFoundError(f"Source file is missing: {name}")
+            add(archive, name, path.read_bytes())
+        add(archive, "SOURCE_FILES.json", (json.dumps(names, indent=2) + "\n").encode("utf-8"))
 
 
 def write_checksums(output):

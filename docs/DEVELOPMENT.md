@@ -9,6 +9,8 @@ python scripts/build_release.py
 
 The builder writes self-contained `PyPack.sh` and `PyPack.command`, a source ZIP and `SHA256SUMS.txt` to ignored `dist/`. Both Unix launchers embed the current application, icon and MIT license. They forward arguments without shell evaluation, return the application's exit status, and remove their temporary files on exit. Their interpreter discovery follows `pypack-setup.sh`.
 
+The source ZIP includes `SOURCE_FILES.json`, so an extracted source download can run the same tests and builder without Git or a `.git` directory. Keep that manifest with the extracted sources. A Git checkout uses its tracked file list instead.
+
 On Windows, install the build tools into a dedicated environment:
 
 ```powershell
