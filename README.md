@@ -6,6 +6,8 @@ A compact Python package manager. Search PyPI, check one or several packages, th
 
 ## Download
 
+The latest published release is **0.1.1**. Features described below reflect the current source and the unreleased 0.1.2 draft; they are not all available in 0.1.1.
+
 Choose **one** file for your operating system from the [latest release](https://github.com/4Raisan/PyPack/releases/latest):
 
 | Platform | Download | Start |
@@ -24,9 +26,9 @@ Each launcher contains the application and square icon. You do not need the sour
 
 The window starts compact; the empty results table takes no space. Activity shows the exact Python interpreter receiving packages. Opening PyPack does not upgrade packages automatically.
 
-Search corrects mistyped names, so `numpi` finds numpy and `reqeusts` finds requests. Each result shows its 30-day download count, and names outside the published top-download list are highlighted in amber — check those before installing, since a name that merely contains your typo is a common typosquat pattern.
+Search corrects mistyped names, so `numpi` finds numpy and `reqeusts` finds requests. Each result shows its 30-day download count, and names outside the published top-download list are highlighted in amber. Check package names carefully: popularity and spelling suggestions do not establish that a package is safe.
 
-**Stop** cancels a running install or upgrade and kills the whole pip process tree; closing the window does the same, so pip is never left writing to your environment unattended. After installing or upgrading, PyPack runs `pip check` and reports any dependency conflicts.
+**Stop** cancels a running install or upgrade and attempts to stop the pip process tree; closing the window also requests cancellation. After installing or upgrading, PyPack runs `pip check` and reports any dependency conflicts.
 
 **Installed** lists everything in the target environment with its version. Check rows to **Upgrade** just those packages, or **Uninstall** them (PyPack asks first). `pip`, `setuptools` and `wheel` are shown greyed out and cannot be checked for removal, because pip needs them to keep working.
 
@@ -60,7 +62,7 @@ python pypack_setup.py --help
 
 Run `python -m unittest discover -s tests -v` for 108 offline checks covering command routing, interpreter selection, protected and read-only environments, install/upgrade/uninstall failures, cancellation, search ranking and caching, and release packaging. The GUI tests drive the real tkinter window — search, the installed view, checkboxes, install, upgrade, uninstall confirmation, Stop, and virtual-environment creation — with simulated package operations. Nothing installs or upgrades a package, and no test contacts PyPI.
 
-GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14, using a virtual display on Linux so the window is exercised on every platform. Statement coverage of `pypack_setup.py` is 76%, and the GUI layer 85%.
+GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14, using a virtual display on Linux. The latest run reported GUI test process crashes on Linux and macOS; the 0.1.2 release remains a draft while these are investigated.
 
 The release workflow builds the Windows executable, checks its bundled icon and Tcl/Tk with an external target Python, attests build provenance for every asset, and checks standalone Unix argument forwarding and exit codes.
 
