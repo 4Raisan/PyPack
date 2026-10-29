@@ -3,6 +3,7 @@
 Skipped automatically where no display is available (headless Linux CI).
 """
 import contextlib
+import gc
 import threading
 import time
 from pathlib import Path
@@ -26,14 +27,26 @@ def descendants(widget):
 
 
 class GuiTests(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        # Probe once, not per test: repeatedly creating and destroying Tk roots
+        # is what destabilises Aqua and X11 across a whole suite.
+        cls.has_display = False
         if tk is None:
-            self.skipTest("tkinter is not installed")
+            return
         try:
             probe = tk.Tk()
         except tk.TclError:
-            self.skipTest("No display available for tkinter")
+            return
         probe.destroy()
+        gc.collect()
+        cls.has_display = True
+
+    def setUp(self):
+        if tk is None:
+            self.skipTest("tkinter is not installed")
+        if not self.has_display:
+            self.skipTest("No display available for tkinter")
 
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
@@ -98,6 +111,13 @@ class GuiTests(unittest.TestCase):
                 # Go through the real close handler so timers are cancelled too.
                 command = window.protocol("WM_DELETE_WINDOW")
                 window.tk.call(command) if command else window.destroy()
+        self.roots.clear()
+        # Drop widget/variable references and finalize them on THIS thread. A Tk
+        # StringVar/PhotoImage __del__ that runs later on a worker thread raises
+        # "main thread is not in main loop" and aborts Tcl (segfault on Aqua).
+        for attribute in ("tree", "entry", "buttons", "status_label", "window"):
+            self.__dict__.pop(attribute, None)
+        gc.collect()
 
     def pump(self, predicate, timeout=5.0):
         """Run the Tk event loop until predicate holds; after() needs real updates."""

@@ -6,7 +6,7 @@ A compact Python package manager. Search PyPI, check one or several packages, th
 
 ## Download
 
-The latest published release is **0.1.1**. Features described below reflect the current source and the unreleased 0.1.2 draft; they are not all available in 0.1.1.
+The latest published release is **0.1.1**. **0.2.0** is prepared and adds the installed-package view, per-package upgrade and uninstall described below; those are not in 0.1.1.
 
 Choose **one** file for your operating system from the [latest release](https://github.com/4Raisan/PyPack/releases/latest):
 
@@ -62,7 +62,7 @@ python pypack_setup.py --help
 
 Run `python -m unittest discover -s tests -v` for 108 offline checks covering command routing, interpreter selection, protected and read-only environments, install/upgrade/uninstall failures, cancellation, search ranking and caching, and release packaging. The GUI tests drive the real tkinter window — search, the installed view, checkboxes, install, upgrade, uninstall confirmation, Stop, and virtual-environment creation — with simulated package operations. Nothing installs or upgrades a package, and no test contacts PyPI.
 
-GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14, using a virtual display on Linux. The latest run reported GUI test process crashes on Linux and macOS; the 0.1.2 release remains a draft while these are investigated.
+GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14, using a virtual display on Linux so the window is exercised on every platform.
 
 The release workflow builds the Windows executable, checks its bundled icon and Tcl/Tk with an external target Python, attests build provenance for every asset, and checks standalone Unix argument forwarding and exit codes.
 
