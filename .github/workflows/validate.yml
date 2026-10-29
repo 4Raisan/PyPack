@@ -10,14 +10,27 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-14]
         python: ['3.10', '3.14']
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - name: Compile every source file
+        run: python -m compileall -q pypack_setup.py scripts tests
+      - name: Install a virtual display and tkinter (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb python3-tk
       - name: Run offline regression checks
-        run: python -m unittest discover -s tests -v
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a python -m unittest discover -s tests -v
+          else
+            python -m unittest discover -s tests -v
+          fi
       - name: Build source and Unix launchers
         run: python scripts/build_release.py
       - name: Parse Windows bootstrap

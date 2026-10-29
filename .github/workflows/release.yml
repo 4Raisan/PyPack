@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,6 +33,14 @@ jobs:
           $report = Get-Content build/runtime-check.json -Raw | ConvertFrom-Json
           if (-not $report.ok -or -not $report.frozen -or $report.self_recursion) { throw 'Invalid packaged runtime report' }
           Get-Content build/runtime-check.json
+      - name: Attest build provenance for the unsigned downloads
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/PyPack.exe
+            dist/PyPack.sh
+            dist/PyPack.command
+            dist/PyPack-*-source.zip
       - uses: actions/upload-artifact@v4
         with:
           name: pypack-downloads
