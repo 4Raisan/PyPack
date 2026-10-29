@@ -91,6 +91,13 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         self.assertEqual(run.call_args[0][0], ["git", "ls-files", "-z"])
 
+    def test_stale_source_zips_are_removed_so_dist_only_ships_this_version(self):
+        version = (build.ROOT / "VERSION").read_text().strip()
+        (self.output / "PyPack-0.0.1-source.zip").write_bytes(b"old")
+        build.build_source(self.output, allow_dirty=True)
+        names = [p.name for p in self.output.glob("PyPack-*-source.zip")]
+        self.assertEqual(names, [f"PyPack-{version}-source.zip"])
+
     def test_checksums_use_lf_so_the_linux_publish_job_can_verify_them(self):
         (self.output / "PyPack.sh").write_bytes(b"#!/bin/sh\necho hi\n")
         build.write_checksums(self.output)

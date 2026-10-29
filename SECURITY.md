@@ -22,6 +22,7 @@ but it means you should only install packages you trust.
   top-download list are highlighted, to make typosquatting easier to spot. This is a
   hint, not a guarantee: always check the name before installing.
 - Stopping an operation or closing the window kills the running `pip` process tree.
+- Uninstalling asks for confirmation and refuses to remove `pip`, `setuptools` or `wheel`.
 
 ## Verifying a download
 

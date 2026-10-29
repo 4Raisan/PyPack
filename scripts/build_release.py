@@ -92,6 +92,10 @@ def build_source(output, allow_dirty=False):
             raise ValueError("Invalid source-file manifest.")
     names = sorted(set(name for name in names if name and name != "SOURCE_FILES.json"
                        and not name.startswith(("releases/", "dist/", "build/", ".git/"))))
+    # The release uploads dist/*; a leftover ZIP from an older version would ship too.
+    for stale in output.glob("PyPack-*-source.zip"):
+        if stale.name != f"PyPack-{version}-source.zip":
+            stale.unlink()
 
     def add(archive, name, data):
         info = zipfile.ZipInfo(f"PyPack-{version}-source/{name}", (1980, 1, 1, 0, 0, 0))
