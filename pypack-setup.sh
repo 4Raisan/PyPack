@@ -18,6 +18,22 @@ find_python() {
     done
     return 1
 }
+require_tk() {
+    # Only the GUI needs tkinter; the CLI works without it.
+    case "${1:-}" in
+        ""|--gui|--update|--auto-update) ;;
+        *) return 0 ;;
+    esac
+    if ! "$PY" -c 'import tkinter' >/dev/null 2>&1; then
+        echo "[PyPack] tkinter is missing, so the window cannot open. Install it:" >&2
+        echo "[PyPack]   Debian/Ubuntu: sudo apt-get install python3-tk" >&2
+        echo "[PyPack]   Fedora: sudo dnf install python3-tkinter   Arch: sudo pacman -S tk" >&2
+        echo "[PyPack]   macOS: brew install python-tk" >&2
+        echo "[PyPack] Or use the CLI, for example: sh PyPack.sh search pandas" >&2
+        return 1
+    fi
+    return 0
+}
 if ! find_python; then
     echo "[PyPack] Python 3.10+ not found. Installing Python..."
     if [ "$(uname)" = "Darwin" ]; then
@@ -45,5 +61,6 @@ fi
 if [ "$#" -eq 0 ]; then
     set -- --gui
 fi
+require_tk "$1" || exit 1
 echo "[PyPack] Using $PY ($("$PY" --version 2>&1))"
 exec "$PY" "$SCRIPT" "$@"
