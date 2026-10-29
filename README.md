@@ -24,7 +24,13 @@ Each launcher contains the application and square icon. You do not need the sour
 
 The window starts compact; the empty results table takes no space. Activity shows the exact Python interpreter receiving packages. Opening PyPack does not upgrade packages automatically.
 
-Activate a virtual environment before launching to use it. OS-managed Python requires a virtual environment. You can also set `PYPACK_PYTHON` to a Python executable path. Package installs/upgrades can change that environment's dependencies.
+Search corrects mistyped names, so `numpi` finds numpy and `reqeusts` finds requests. Each result shows its 30-day download count, and names outside the published top-download list are highlighted in amber — check those before installing, since a name that merely contains your typo is a common typosquat pattern.
+
+**Stop** cancels a running install or upgrade and kills the whole pip process tree; closing the window does the same, so pip is never left writing to your environment unattended. After installing or upgrading, PyPack runs `pip check` and reports any dependency conflicts.
+
+Activate a virtual environment before launching to use it, or click **New venv** to create one and switch to it without leaving the window. OS-managed Python and read-only `site-packages` both require a virtual environment; PyPack detects each and says so. You can also set `PYPACK_PYTHON` to a Python executable path. Package installs/upgrades can change that environment's dependencies.
+
+Activity is also written to a rotating log, which is useful because the Windows executable hides its console: `%LOCALAPPDATA%\PyPack\logs\pypack.log`, `~/Library/Application Support/PyPack/logs/pypack.log` on macOS, and `~/.local/share/pypack/logs/pypack.log` on Linux.
 
 ## How it works
 
@@ -40,17 +46,21 @@ python pypack_setup.py search panda
 python pypack_setup.py install pandas pillow
 python pypack_setup.py fix
 python pypack_setup.py update-all
+python pypack_setup.py --version
+python pypack_setup.py --help
 ```
 
-Exit codes: 0 success, 1 operational failure, 2 invalid arguments. `--gui --update` explicitly upgrades packages at startup.
+`search` prints a JSON array, so it can be piped to other tools. Exit codes: 0 success, 1 operational failure, 2 invalid arguments. `--gui --update` explicitly upgrades packages at startup.
 
 ## Verification
 
-Run `python -m unittest discover -s tests -v` for offline checks of command routing, interpreter selection, protected environments, package-operation failures and release packaging. GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14. Tests use simulated package operations and do not install or upgrade packages.
+Run `python -m unittest discover -s tests -v` for 87 offline checks covering command routing, interpreter selection, protected and read-only environments, package-operation failures, cancellation, search ranking and caching, and release packaging. The GUI tests drive the real tkinter window — search, checkboxes, install, Stop, and virtual-environment creation — with simulated package operations. Nothing installs or upgrades a package, and no test contacts PyPI.
 
-The release workflow builds the Windows executable, checks its bundled icon and Tcl/Tk with an external target Python, and checks standalone Unix argument forwarding and exit codes. Earlier manual GUI checks covered the compact layout, result checkboxes and simulated single/multiple installs.
+GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14, using a virtual display on Linux so the window is exercised on every platform. Statement coverage of `pypack_setup.py` is 75%, and the GUI layer 86%.
 
-Native Linux/macOS desktop checks and clean-machine Python installation remain unverified. The Windows executable is unsigned. Script files use the operating system's default file icon; the running app displays the PyPack logo.
+The release workflow builds the Windows executable, checks its bundled icon and Tcl/Tk with an external target Python, attests build provenance for every asset, and checks standalone Unix argument forwarding and exit codes.
+
+A native desktop session and clean-machine Python installation still require manual validation. The Windows executable is unsigned — see [SECURITY.md](SECURITY.md) for how to verify a download against its checksum and provenance attestation. Script files use the operating system's default file icon; the running app displays the PyPack logo.
 
 ## Build downloads
 
