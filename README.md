@@ -28,6 +28,8 @@ Search corrects mistyped names, so `numpi` finds numpy and `reqeusts` finds requ
 
 **Stop** cancels a running install or upgrade and kills the whole pip process tree; closing the window does the same, so pip is never left writing to your environment unattended. After installing or upgrading, PyPack runs `pip check` and reports any dependency conflicts.
 
+**Installed** lists everything in the target environment with its version. Check rows to **Upgrade** just those packages, or **Uninstall** them (PyPack asks first). `pip`, `setuptools` and `wheel` are shown greyed out and cannot be checked for removal, because pip needs them to keep working.
+
 Activate a virtual environment before launching to use it, or click **New venv** to create one and switch to it without leaving the window. OS-managed Python and read-only `site-packages` both require a virtual environment; PyPack detects each and says so. You can also set `PYPACK_PYTHON` to a Python executable path. Package installs/upgrades can change that environment's dependencies.
 
 Activity is also written to a rotating log, which is useful because the Windows executable hides its console: `%LOCALAPPDATA%\PyPack\logs\pypack.log`, `~/Library/Application Support/PyPack/logs/pypack.log` on macOS, and `~/.local/share/pypack/logs/pypack.log` on Linux.
@@ -44,19 +46,21 @@ Keep `pypack_setup.py`, `PyPack-Setup.bat`, `pypack-bootstrap.ps1`, `pypack-setu
 python pypack_setup.py --gui
 python pypack_setup.py search panda
 python pypack_setup.py install pandas pillow
+python pypack_setup.py uninstall pillow
+python pypack_setup.py list
 python pypack_setup.py fix
 python pypack_setup.py update-all
 python pypack_setup.py --version
 python pypack_setup.py --help
 ```
 
-`search` prints a JSON array, so it can be piped to other tools. Exit codes: 0 success, 1 operational failure, 2 invalid arguments. `--gui --update` explicitly upgrades packages at startup.
+`search` and `list` print JSON, so they can be piped to other tools. Exit codes: 0 success, 1 operational failure, 2 invalid arguments. `--gui --update` explicitly upgrades packages at startup.
 
 ## Verification
 
-Run `python -m unittest discover -s tests -v` for 87 offline checks covering command routing, interpreter selection, protected and read-only environments, package-operation failures, cancellation, search ranking and caching, and release packaging. The GUI tests drive the real tkinter window — search, checkboxes, install, Stop, and virtual-environment creation — with simulated package operations. Nothing installs or upgrades a package, and no test contacts PyPI.
+Run `python -m unittest discover -s tests -v` for 108 offline checks covering command routing, interpreter selection, protected and read-only environments, install/upgrade/uninstall failures, cancellation, search ranking and caching, and release packaging. The GUI tests drive the real tkinter window — search, the installed view, checkboxes, install, upgrade, uninstall confirmation, Stop, and virtual-environment creation — with simulated package operations. Nothing installs or upgrades a package, and no test contacts PyPI.
 
-GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14, using a virtual display on Linux so the window is exercised on every platform. Statement coverage of `pypack_setup.py` is 75%, and the GUI layer 86%.
+GitHub Actions runs these checks on Windows, Linux and macOS with Python 3.10 and 3.14, using a virtual display on Linux so the window is exercised on every platform. Statement coverage of `pypack_setup.py` is 76%, and the GUI layer 85%.
 
 The release workflow builds the Windows executable, checks its bundled icon and Tcl/Tk with an external target Python, attests build provenance for every asset, and checks standalone Unix argument forwarding and exit codes.
 
