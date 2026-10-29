@@ -65,6 +65,10 @@ class GuiTests(unittest.TestCase):
         self.search = self.stack.enter_context(
             patch.object(app, "search_pypi", return_value=["numpy", "NuMPI"]))
         self.install = self.stack.enter_context(patch.object(app, "install_pkgs", return_value=True))
+        self.uninstall = self.stack.enter_context(patch.object(app, "uninstall_pkgs", return_value=True))
+        self.installed = self.stack.enter_context(patch.object(
+            app, "installed_packages",
+            return_value=[("numpy", "2.1.0"), ("pip", "26.0"), ("wheel", "0.45")]))
 
     def build(self, auto_update=False):
         captured = {}
@@ -125,13 +129,24 @@ class GuiTests(unittest.TestCase):
         self.tree.event_generate("<Button-1>", x=box[0] + 5, y=box[1] + box[3] // 2, when="now")
         self.window.update()
 
+    def click_row(self, name):
+        self.window.update()
+        box = self.tree.bbox(name)
+        self.tree.event_generate("<Button-1>", x=box[0] + 5, y=box[1] + box[3] // 2, when="now")
+        self.window.update()
+
+    def open_installed(self):
+        self.buttons["Installed"].invoke()
+        return self.pump(lambda: not self.disabled("Installed"))
+
     # --- layout ----------------------------------------------------------
 
     def test_window_shows_version_and_a_download_column(self):
         self.build()
         self.assertIn(app.app_version(), self.window.title())
-        self.assertEqual(tuple(self.tree.cget("columns")), ("name", "downloads"))
-        for text in ("Fix pip", "Update all", "New venv", "Get Python", "Search", "Stop", "Install"):
+        self.assertEqual(tuple(self.tree.cget("columns")), ("name", "detail"))
+        for text in ("Fix pip", "Update all", "New venv", "Get Python", "Search", "Installed",
+                     "Stop", "Install", "Upgrade", "Uninstall"):
             self.assertIn(text, self.buttons)
         self.assertTrue(self.disabled("Stop"), "Stop must be inert while idle")
 
@@ -267,6 +282,79 @@ class GuiTests(unittest.TestCase):
             self.buttons["Update all"].invoke()
         ask.assert_called_once()
         self.assertTrue(self.disabled("Stop"), "declining must not start an update")
+
+    # --- installed view --------------------------------------------------
+
+    def test_installed_view_lists_versions_and_marks_core_packages(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.assertEqual(self.tree.get_children(), ("numpy", "pip", "wheel"))
+        self.assertEqual(self.tree.item("numpy", "values"), ("numpy", "2.1.0"))
+        self.assertEqual(self.tree.item("pip", "tags"), ("core",))
+        self.assertEqual(str(self.tree.heading("detail", "text")), "Installed")
+        self.assertIn("3 installed", self.value(self.status_label))
+
+    def test_installed_mode_swaps_install_for_upgrade_and_uninstall(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.assertFalse(self.buttons["Install"].winfo_ismapped())
+        self.assertTrue(self.buttons["Upgrade"].winfo_ismapped())
+        self.assertTrue(self.buttons["Uninstall"].winfo_ismapped())
+        self.assertTrue(self.disabled("Upgrade"), "nothing checked yet")
+        self.assertTrue(self.disabled("Uninstall"))
+
+    def test_search_returns_to_install_mode(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.assertTrue(self.run_search())
+        self.assertTrue(self.buttons["Install"].winfo_ismapped())
+        self.assertFalse(self.buttons["Upgrade"].winfo_ismapped())
+        self.assertEqual(str(self.tree.heading("detail", "text")), "Downloads/30d")
+
+    def test_protected_packages_cannot_be_checked(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.click_row("pip")
+        self.assertEqual(self.tree.item("pip", "text"), "☐")
+        self.assertTrue(self.disabled("Uninstall"))
+        self.assertIn("cannot be removed", self.value(self.status_label))
+
+    def test_upgrade_sends_only_checked_names(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.check_first_row()  # numpy
+        self.assertEqual(self.buttons["Upgrade"].cget("text"), "Upgrade (1)")
+        self.buttons["Upgrade"].invoke()
+        self.assertTrue(self.pump(lambda: self.install.called))
+        self.assertEqual(self.install.call_args[0][0], ["numpy"])
+        self.assertTrue(self.install.call_args[0][2], "upgrade must pass --upgrade")
+
+    def test_uninstall_confirms_then_sends_checked_names(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.check_first_row()
+        with patch("tkinter.messagebox.askyesno", return_value=True) as ask:
+            self.buttons["Uninstall"].invoke()
+        ask.assert_called_once()
+        self.assertTrue(self.pump(lambda: self.uninstall.called))
+        self.assertEqual(self.uninstall.call_args[0][0], ["numpy"])
+
+    def test_uninstall_declined_does_nothing(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.check_first_row()
+        with patch("tkinter.messagebox.askyesno", return_value=False):
+            self.buttons["Uninstall"].invoke()
+        self.window.update()
+        self.uninstall.assert_not_called()
+
+    def test_uninstall_without_selection_is_refused(self):
+        self.build()
+        self.assertTrue(self.open_installed())
+        self.assertTrue(self.disabled("Uninstall"), "must be inert with nothing checked")
+        self.buttons["Uninstall"].invoke()
+        self.window.update()
+        self.uninstall.assert_not_called()
 
     # --- virtual environments --------------------------------------------
 

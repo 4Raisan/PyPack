@@ -214,6 +214,81 @@ class PyPackTests(unittest.TestCase):
             self.assertTrue(app.has_net())
         self.assertEqual(urlopen.call_args[0][0], "https://mirror.internal/pypi/simple/")
 
+    # --- uninstall and installed listing ---------------------------------
+
+    def test_uninstall_passes_names_after_a_separator_with_yes(self):
+        with patch.object(app, "can_modify_environment", return_value=True), \
+             patch.object(app, "check_dependencies", return_value=True), \
+             patch.object(app, "run", return_value=(True, "")) as run:
+            self.assertTrue(app.uninstall_pkgs(["first", "second"], log=lambda _: None))
+        run.assert_called_once_with(
+            ["target-python", "-m", "pip", "--disable-pip-version-check", "--no-input",
+             "uninstall", "-y", "-q", "--", "first", "second"], timeout=600)
+
+    def test_uninstall_refuses_pip_setuptools_and_wheel(self):
+        for name in ("pip", "Setuptools", "WHEEL"):
+            with self.subTest(name=name), \
+                 patch.object(app, "can_modify_environment", return_value=True), \
+                 patch.object(app, "run") as run:
+                messages = []
+                self.assertFalse(app.uninstall_pkgs([name], log=messages.append))
+                run.assert_not_called()
+                self.assertTrue(any("Refusing" in m for m in messages))
+
+    def test_uninstall_refuses_a_batch_containing_a_protected_name(self):
+        with patch.object(app, "can_modify_environment", return_value=True), \
+             patch.object(app, "run") as run:
+            self.assertFalse(app.uninstall_pkgs(["numpy", "pip"], log=lambda _: None))
+        run.assert_not_called()
+
+    def test_uninstall_rejects_empty_names_and_options(self):
+        with patch.object(app, "can_modify_environment", return_value=True), \
+             patch.object(app, "run") as run:
+            for names in ([], [" "], ["--yes"]):
+                self.assertFalse(app.uninstall_pkgs(names, log=lambda _: None))
+        run.assert_not_called()
+
+    def test_uninstall_reports_failure_and_keeps_error(self):
+        messages = []
+        with patch.object(app, "can_modify_environment", return_value=True), \
+             patch.object(app, "run", return_value=(False, "permission denied")):
+            self.assertFalse(app.uninstall_pkgs(["example"], log=messages.append))
+        self.assertIn("permission denied", messages)
+
+    def test_uninstall_blocks_on_a_managed_environment(self):
+        app._TARGET_INFO = {"managed": True}
+        with patch.object(app, "run") as run:
+            self.assertFalse(app.uninstall_pkgs(["example"], log=lambda _: None))
+        run.assert_not_called()
+
+    def test_installed_packages_parses_names_and_versions(self):
+        with patch.object(app, "run", return_value=(True, "NumPy==2.1.0\nFlask==3.0.1\n")):
+            self.assertEqual(app.installed_packages(), [("NumPy", "2.1.0"), ("Flask", "3.0.1")])
+            self.assertEqual(app.installed_set(), {"numpy", "flask"})
+
+    def test_installed_packages_ignores_editable_and_direct_lines(self):
+        with patch.object(app, "run", return_value=(True, "-e git+https://x/y#egg=z\nfoo @ file:///tmp/foo\nok==1\n")):
+            self.assertEqual(app.installed_packages(), [("ok", "1")])
+        with patch.object(app, "run", return_value=(False, "")):
+            self.assertEqual(app.installed_packages(), [])
+
+    @patch.dict(app.os.environ, {}, clear=True)
+    def test_cli_list_prints_json(self):
+        with patch.object(app, "installed_packages", return_value=[("numpy", "2.1.0")]):
+            status, output = self.dispatch("list")
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(output), [{"name": "numpy", "version": "2.1.0"}])
+        self.assertEqual(self.dispatch("list", "extra")[0], 2)
+
+    @patch.dict(app.os.environ, {}, clear=True)
+    def test_cli_uninstall_routes_and_propagates_failure(self):
+        with patch.object(app, "uninstall_pkgs", return_value=True) as uninstall:
+            self.assertEqual(self.dispatch("uninstall", "example")[0], 0)
+        uninstall.assert_called_once_with(["example"])
+        with patch.object(app, "uninstall_pkgs", return_value=False):
+            self.assertEqual(self.dispatch("uninstall", "example")[0], 1)
+        self.assertEqual(self.dispatch("uninstall")[0], 2)
+
     # --- cancellation -----------------------------------------------------
 
     def test_subprocess_timeout_returns_failure_and_kills_the_tree(self):

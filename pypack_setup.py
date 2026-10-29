@@ -552,13 +552,21 @@ def search_pypi(name, limit=20):
         pass
     return cands or []
 
+def installed_packages():
+    """(name, version) pairs for everything installed, from one pip call."""
+    ok, out = run(pip_cmd("list", "--format=freeze"), timeout=60)
+    if not ok:
+        return []
+    pairs = []
+    for line in out.splitlines():
+        name, separator, version = line.partition("==")
+        if separator and name.strip():
+            pairs.append((name.strip(), version.strip()))
+    return pairs
+
 def installed_set():
     """Lowercase names of all installed packages (one pip call)."""
-    ok, out = run(pip_cmd("list", "--format=freeze",
-                          "--disable-pip-version-check"), timeout=30)
-    if not ok:
-        return set()
-    return {l.split("==")[0].lower() for l in out.splitlines() if "==" in l}
+    return {name.lower() for name, _ in installed_packages()}
 
 def installed_ver(pkg):
     ok, out = run(pip_cmd("show", pkg), timeout=30)
@@ -568,6 +576,41 @@ def installed_ver(pkg):
         if line.lower().startswith("version:"):
             return line.split(":", 1)[1].strip()
     return "?"
+
+PROTECTED = {"pip", "setuptools", "wheel"}
+
+def uninstall_pkgs(pkgs, log=log_fn, progress=None):
+    """Remove packages. pip/setuptools/wheel are refused: removing them breaks
+    the environment and PyPack's own repair path."""
+    pkgs = [(p or "").strip() for p in (pkgs or [])]
+    pkgs = [p for p in pkgs if p]
+    if not pkgs:
+        log("!! nothing to uninstall (empty name).")
+        return False
+    if not can_modify_environment(log):
+        return False
+    if any(p.startswith("-") for p in pkgs):
+        log("!! Pass package names, not pip options.")
+        return False
+    blocked = [p for p in pkgs if normalize(p) in PROTECTED]
+    if blocked:
+        log(f"!! Refusing to uninstall {', '.join(blocked)}: pip needs them to work.")
+        return False
+    log(f"Uninstalling {', '.join(pkgs)} ...")
+    if progress:
+        try:
+            progress("Uninstalling " + ", ".join(pkgs))
+        except Exception:
+            pass
+    ok, out = run(pip_cmd("uninstall", "-y", "-q", "--", *pkgs), timeout=600)
+    if not ok:
+        log(out[-1500:] if len(out) > 1500 else out)
+        log(f"!! uninstall failed for: {', '.join(pkgs)}")
+        return False
+    for p in pkgs:
+        log(f"Removed: {p}")
+    check_dependencies(log)
+    return True
 
 def install_pkgs(pkgs, log=log_fn, upgrade=True, progress=None):
     pkgs = [(p or "").strip() for p in (pkgs or [])]
@@ -724,21 +767,23 @@ def launch_gui(auto_update=False):
     entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
     controls.append(entry)
     button(searchrow, "Search", lambda: do_search(), True).pack(side="right")
+    button(searchrow, "Installed", lambda: show_installed()).pack(side="right", padx=(0, 6))
     ttk.Label(browser, textvariable=count, style="Sub.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 5))
     results = ttk.Frame(browser)
     results.grid(row=2, column=0, sticky="nsew")
     results.rowconfigure(0, weight=1)
     results.columnconfigure(0, weight=1)
-    tree = ttk.Treeview(results, columns=("name", "downloads"), show="tree headings",
+    tree = ttk.Treeview(results, columns=("name", "detail"), show="tree headings",
                         selectmode="browse", height=3)
     tree.heading("#0", text="")
     tree.column("#0", width=32, minwidth=32, stretch=False, anchor="center")
     tree.heading("name", text="Package")
     tree.column("name", width=270, minwidth=120, anchor="w")
-    tree.heading("downloads", text="Downloads/30d")
-    tree.column("downloads", width=110, minwidth=90, stretch=False, anchor="e")
+    tree.heading("detail", text="Downloads/30d")
+    tree.column("detail", width=110, minwidth=90, stretch=False, anchor="e")
     tree.tag_configure("inst", foreground="#7ee787")
     tree.tag_configure("rare", foreground="#e3b341")
+    tree.tag_configure("core", foreground=SUB)
     tree.grid(row=0, column=0, sticky="nsew")
     scrollbar = ttk.Scrollbar(results, orient="vertical", command=tree.yview)
     scrollbar.grid(row=0, column=1, sticky="ns")
@@ -749,6 +794,8 @@ def launch_gui(auto_update=False):
     installrow.grid_remove()
     install_button = button(installrow, "Install", lambda: do_install_at(), True)
     install_button.pack(side="right")
+    upgrade_button = button(installrow, "Upgrade", lambda: upgrade_checked(), True)
+    uninstall_button = button(installrow, "Uninstall", lambda: uninstall_checked())
     ttk.Label(installrow, textvariable=selection, style="Sub.TLabel").pack(side="left", fill="x", expand=True)
 
     activitybar = ttk.Frame(root, padding=(14, 8, 14, 4))
@@ -774,7 +821,7 @@ def launch_gui(auto_update=False):
     status_label = ttk.Label(root, textvariable=status, style="Sub.TLabel", padding=(14, 5, 14, 8), wraplength=600)
     status_label.grid(row=5, column=0, sticky="ew")
 
-    state = {"busy": False, "closed": False, "search": 0, "poll": None}
+    state = {"busy": False, "closed": False, "search": 0, "poll": None, "mode": "search"}
     callbacks = queue.Queue()
     def schedule(fn):
         if not state["closed"]:
@@ -804,15 +851,37 @@ def launch_gui(auto_update=False):
     root.bind("<Configure>", resize)
     def update_selection():
         n = len(checked)
-        selection.set(f"{n} checked" if n else "Check packages to install.")
-        install_button.configure(text=f"Install ({n})" if n else "Install")
-        install_button.configure(state="disabled" if state["busy"] or (tree.get_children() and not n) else "normal")
+        if state["mode"] == "search":
+            selection.set(f"{n} checked" if n else "Check packages to install.")
+            install_button.configure(text=f"Install ({n})" if n else "Install")
+            install_button.configure(state="disabled" if state["busy"] or (tree.get_children() and not n) else "normal")
+        else:
+            selection.set(f"{n} checked" if n else "Check packages to upgrade or uninstall.")
+            for widget, label in ((upgrade_button, "Upgrade"), (uninstall_button, "Uninstall")):
+                widget.configure(text=f"{label} ({n})" if n else label)
+                widget.configure(state="disabled" if state["busy"] or not n else "normal")
+    def set_mode(mode):
+        state["mode"] = mode
+        if mode == "search":
+            tree.heading("detail", text="Downloads/30d")
+            upgrade_button.pack_forget()
+            uninstall_button.pack_forget()
+            install_button.pack(side="right")
+        else:
+            tree.heading("detail", text="Installed")
+            install_button.pack_forget()
+            upgrade_button.pack(side="right")
+            uninstall_button.pack(side="right", padx=(0, 6))
+        update_selection()
     def toggle_package(event):
         if state["busy"]:
             return "break"
         item = tree.focus() if event.keysym == "space" else tree.identify_row(event.y)
         if not item:
             return
+        if state["mode"] == "installed" and normalize(item) in PROTECTED:
+            status.set("pip, setuptools and wheel cannot be removed; pip needs them.")
+            return "break"
         if item in checked:
             checked.remove(item)
         else:
@@ -844,7 +913,7 @@ def launch_gui(auto_update=False):
     def refresh_info():
         version = pip_ver()
         schedule(lambda: info.set(f"Python {py_ver()}  |  pip {version}  |  {OS}"))
-    def start(message, fn, done_message="Done."):
+    def start(message, fn, done_message="Done.", refresh=False):
         if state["busy"]:
             return
         _CANCEL.clear()
@@ -860,6 +929,8 @@ def launch_gui(auto_update=False):
                 log(f"!! {error}")
                 result = "Operation failed. See Activity for details."
             schedule(lambda: busy(False, result))
+            if refresh and not _CANCEL.is_set():
+                schedule(show_installed)  # versions changed; re-read the installed list
             refresh_info()
         threading.Thread(target=worker, daemon=True).start()
     def stop():
@@ -904,6 +975,7 @@ def launch_gui(auto_update=False):
             if children:
                 tree.delete(*children)
             checked.clear()
+            set_mode("search")
             tree.configure(height=max(1, min(5, len(names))))
             installrow.grid()
             popular = _pypi_popularity() or {}
@@ -953,6 +1025,72 @@ def launch_gui(auto_update=False):
                 except Exception as exc:
                     log(f"Could not check installed packages: {exc}")
         threading.Thread(target=worker, daemon=True).start()
+    def show_installed():
+        if state["busy"]:
+            return
+        state["search"] += 1  # invalidate any in-flight search fill
+        token = state["search"]
+        busy(True, "Listing installed packages…")
+        count.set("Listing installed packages…")
+        def fill_installed(pairs, error):
+            if token != state["search"]:
+                return
+            children = tree.get_children()
+            if children:
+                tree.delete(*children)
+            checked.clear()
+            set_mode("installed")
+            tree.configure(height=max(1, min(5, len(pairs))))
+            installrow.grid()
+            for name, version in pairs:
+                core = normalize(name) in PROTECTED
+                tree.insert("", "end", iid=name, text="☐", values=(name, version),
+                            tags=("core",) if core else ())
+            if pairs:
+                results.grid()
+                tree.see(pairs[0][0])
+            else:
+                results.grid_remove()
+            count.set(f"{len(pairs)} installed packages")
+            message = error or (f"{len(pairs)} installed. Check packages to upgrade or uninstall."
+                                if pairs else "No packages installed in this environment.")
+            update_selection()
+            busy(False, message)
+        def worker():
+            try:
+                pairs = installed_packages()
+                error = None
+                log(f"Installed: {len(pairs)} packages")
+            except Exception as exc:
+                pairs, error = [], f"Could not list packages: {exc}"
+                log(error)
+            schedule(lambda: fill_installed(pairs, error))
+        threading.Thread(target=worker, daemon=True).start()
+    def checked_names():
+        return [name for name in tree.get_children() if name in checked]
+    def upgrade_checked():
+        if state["busy"]:
+            return
+        names = checked_names()
+        if not names:
+            status.set("Check one or more packages first.")
+            return
+        start("Upgrading " + ", ".join(names),
+              lambda log, progress: install_pkgs(names, log, True, progress),
+              "Upgrade complete.", refresh=True)
+    def uninstall_checked():
+        if state["busy"]:
+            return
+        names = checked_names()
+        if not names:
+            status.set("Check one or more packages first.")
+            return
+        if not messagebox.askyesno(APP, f"Uninstall {len(names)} package(s)?\n\n{', '.join(names)}\n\n"
+                                        "Other packages that depend on them may stop working."):
+            return
+        start("Uninstalling " + ", ".join(names),
+              lambda log, progress: uninstall_pkgs(names, log, progress),
+              "Uninstall complete.", refresh=True)
     def do_install_at(event=None):
         if state["busy"]:
             return
@@ -1110,7 +1248,7 @@ def prepare_python(gui):
 
 def usage():
     return ("Usage: pypack_setup.py [--gui] [--update] | fix | update-all | "
-            "search <query> | install <packages> | get-python\n"
+            "search <query> | install <packages> | uninstall <packages> | list | get-python\n"
             "       pypack_setup.py --help | --version\n"
             "Exit codes: 0 success, 1 operational failure, 2 invalid arguments.")
 
@@ -1168,15 +1306,23 @@ def main(argv):
             print(f"GUI unavailable ({error}). Install tkinter or use the CLI:")
             print(f"  {PYS} pypack_setup.py fix | update-all | search <query> | install <packages>")
             return 1
-    if command in ("fix", "essentials", "update-all", "update", "get-python"):
+    if command in ("fix", "essentials", "update-all", "update", "get-python", "list"):
         if len(args) != 1:
             print(f"!! {command} does not accept extra arguments.")
             return 2
         if command == "get-python":
             open_python_download()
             return 0
+        if command == "list":
+            print(json.dumps([{"name": n, "version": v} for n, v in installed_packages()]))
+            return 0
         operation = ensure_essentials if command in ("fix", "essentials") else update_all
         return 0 if operation() else 1
+    if command == "uninstall":
+        if len(args) < 2:
+            print("Usage: pypack_setup.py uninstall <package> [more packages]")
+            return 2
+        return 0 if uninstall_pkgs(args[1:]) else 1
     if command == "search":
         if len(args) != 2 or not args[1].strip():
             print("Usage: pypack_setup.py search <query>")
