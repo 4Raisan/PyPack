@@ -2,11 +2,11 @@
 
 <p align="center"><img src="assets/pypack-logo.png" alt="PyPack" width="440"></p>
 
-A compact Python package manager. Search PyPI, check one or several packages, then install them. Fix pip or update installed packages from the same window.
+A compact Python package manager. Search PyPI, check one or several packages, then install, upgrade or uninstall them. Fix pip or update installed packages from the same window.
 
 ## Download
 
-The latest published release is **0.1.1**. **0.2.0** is prepared and adds the installed-package view, per-package upgrade and uninstall described below; those are not in 0.1.1.
+The latest release is **0.2.0**, which adds the installed-package view with per-package upgrade and uninstall described below.
 
 Choose **one** file for your operating system from the [latest release](https://github.com/4Raisan/PyPack/releases/latest):
 
