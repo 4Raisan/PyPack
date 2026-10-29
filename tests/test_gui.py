@@ -4,6 +4,9 @@ Skipped automatically where no display is available (headless Linux CI).
 """
 import contextlib
 import gc
+import os
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -19,6 +22,8 @@ except ImportError:  # headless build without python3-tk
 
 import pypack_setup as app
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def descendants(widget):
     for child in widget.winfo_children():
@@ -26,27 +31,38 @@ def descendants(widget):
         yield from descendants(child)
 
 
-class GuiTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Probe once, not per test: repeatedly creating and destroying Tk roots
-        # is what destabilises Aqua and X11 across a whole suite.
-        cls.has_display = False
-        if tk is None:
-            return
-        try:
-            probe = tk.Tk()
-        except tk.TclError:
-            return
-        probe.destroy()
-        gc.collect()
-        cls.has_display = True
+class _IsolatedOnMacos(type):
+    """Aqua Tk cannot destroy and re-create a root within one process, so on
+    macOS each GUI test runs in its own interpreter. Linux and Windows, which
+    tolerate root re-creation, stay in-process."""
 
+    def __new__(mcs, name, bases, namespace):
+        for key, value in list(namespace.items()):
+            if key.startswith("test_") and callable(value):
+                namespace[key] = mcs._isolate(key, value)
+        return super().__new__(mcs, name, bases, namespace)
+
+    @staticmethod
+    def _isolate(name, method):
+        def wrapper(self, *args, **kwargs):
+            if sys.platform != "darwin" or os.environ.get("PYPACK_GUI_CHILD"):
+                return method(self, *args, **kwargs)
+            environment = dict(os.environ, PYPACK_GUI_CHILD="1")
+            environment["PYTHONPATH"] = os.pathsep.join(
+                [str(ROOT), str(ROOT / "tests"), environment.get("PYTHONPATH", "")])
+            result = subprocess.run(
+                [sys.executable, "-m", "unittest", "-v", f"test_gui.GuiTests.{name}"],
+                cwd=ROOT, env=environment, capture_output=True, text=True, timeout=120)
+            if result.returncode != 0:
+                self.fail(f"isolated GUI test {name} crashed or failed:\n"
+                          f"{result.stdout}\n{result.stderr}")
+        return wrapper
+
+
+class GuiTests(unittest.TestCase, metaclass=_IsolatedOnMacos):
     def setUp(self):
         if tk is None:
             self.skipTest("tkinter is not installed")
-        if not self.has_display:
-            self.skipTest("No display available for tkinter")
 
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
@@ -90,7 +106,10 @@ class GuiTests(unittest.TestCase):
             captured["root"] = root
 
         self.stack.enter_context(patch.object(tk.Tk, "mainloop", fake_mainloop))
-        app.launch_gui(auto_update=auto_update)
+        try:
+            app.launch_gui(auto_update=auto_update)
+        except tk.TclError:
+            self.skipTest("No display available for tkinter")
         self.window = captured["root"]
         self.roots.append(self.window)
         self.stack.callback(self.destroy_windows)
