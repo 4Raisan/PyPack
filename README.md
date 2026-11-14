@@ -18,6 +18,8 @@ Choose **one** file for your operating system from the [latest release](https://
 
 Each launcher contains the application and square icon. You do not need the source files, a separate logo, or the `.bat`/`.ps1` helpers to use these downloads. Windows bundles its Python-install helper and Tcl/Tk GUI runtime; it detects Python 3.10+ or offers to install/select it when missing. Linux/macOS require Python 3.10+ and tkinter.
 
+Verify downloads against [SHA256SUMS.txt](https://github.com/4Raisan/PyPack/releases/latest/download/SHA256SUMS.txt).
+
 ## Use
 
 1. Open PyPack and search for a package, such as `panda`.
